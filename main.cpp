@@ -17,6 +17,11 @@
 
 using namespace std;
 
+void writeLog(string text)
+{
+    cout << text;
+}
+
 void connectToMobus(Ottomator& theSequencer)
 {
     cout << "Please enter port name: ";
@@ -129,7 +134,7 @@ void elementaryMenu(Ottomator& theSequencer)
         cout << "6 - alarmReset(int actuator) " << endl;
         cout << "7 - updateStatusOfCurrent(actuator) " << endl;
         cout << "8 - modbusConnectRTU(port) " << endl;
-        cout << "9 - " << endl;
+        cout << "9 - 999999999999999" << endl;
         cout << "0 - back" << endl;
         cout << "Your choice is: " ;
         cin >> command;
@@ -186,6 +191,7 @@ void elementaryMenu(Ottomator& theSequencer)
                 break;
             // 9 -
             case '9':
+                theSequencer.m_robot.m_busManager.modbusReadData(OttoUtils::pAct, 0x03, 0x9000, 2, 10, 2);
                 break;
             case '0':
                 command = 0;
@@ -228,20 +234,20 @@ void basicPutSample(Robot& R, int destination)
     R.setPosition(3, 1);
 }
 
-void goToCastel(Robot& R)
+void goToCastel(Ottomator& theSequencer)
 {
     cout << "********** Go to Castel : Y **********" << endl;
-    R.setPosition(2, R.yOfSample(POSITION_DETECTOR));
+    theSequencer.m_robot.setPosition(2, theSequencer.yOfSample(POSITION_DETECTOR));
     cout << "********** Go to Castel : X **********" << endl;
-    R.setPosition(1, R.xOfSample(POSITION_DETECTOR)); // long motion
+    theSequencer.m_robot.setPosition(1, theSequencer.xOfSample(POSITION_DETECTOR)); // long motion
 }
 
-void goToSample(int sampleN, Robot& R)
+void goToSample(int sampleN, Ottomator& theSequencer)
 {
     cout << "********** Go to Sample N : X **********" << endl;
-    R.setPosition(1, R.xOfSample(sampleN));
+    theSequencer.m_robot.setPosition(1, theSequencer.xOfSample(sampleN));
     cout << "********** Go to Sample N : Y **********" << endl;
-    R.setPosition(2, R.yOfSample(sampleN));
+    theSequencer.m_robot.setPosition(2, theSequencer.yOfSample(sampleN));
 }
 
 void inputSampleArray(Ottomator& theSequencer)
@@ -330,7 +336,7 @@ void sequenceMenu(Ottomator& theSequencer)
             // 3 - [demo] go to sample N
             case '3':
                 sampleN = input(OttoUtils::extendedSampleNb);
-                (sampleN == POSITION_DETECTOR) ? goToCastel(R) : goToSample(sampleN, R);
+                (sampleN == POSITION_DETECTOR) ? goToCastel(theSequencer) : goToSample(sampleN, theSequencer);
                 break;
             // 4 - [demo] basic fetch/putback sample N
             case '4':
@@ -339,15 +345,15 @@ void sequenceMenu(Ottomator& theSequencer)
                 cout << "********** Lift up **********" << endl;
                 R.setPosition(3, 1);
                 // Motion 1
-                (fetch) ? goToSample(sampleN, R) : goToCastel(R);
+                (fetch) ? goToSample(sampleN, theSequencer) : goToCastel(theSequencer);
                 cout << "********** Basic Pick **********" << endl;
                 basicPickSample(R);
                 // Motion 2
-                (fetch) ? goToCastel(R) : goToSample(sampleN, R);
+                (fetch) ? goToCastel(theSequencer) : goToSample(sampleN, theSequencer);
                 cout << "********** Basic Put **********" << endl;
                 (fetch) ? destination = 3 : destination = 2; basicPutSample(R, destination);
                 // Finish
-                (fetch) ? goToSample(22, R) : goToSample(0, R);
+                (fetch) ? goToSample(22, theSequencer) : goToSample(0, theSequencer);
                 break;
             // 5 - [demo] complete cycle
             case '5':
@@ -413,9 +419,9 @@ void convertMe()
 
 int main()
 {
-    cout << "----------------" << endl;
-    cout << "| Ottomator100 |" << endl;
-    cout << "----------------" << endl;
+    cout << "-----------------------------------" << endl;
+    cout << "| Ottomator100 InterWinner Edition|" << endl;
+    cout << "-----------------------------------" << endl;
 
 
     // Create objects
@@ -463,7 +469,7 @@ int main()
             case 'D':
                 for(int n=0; n < 23; ++n)
                 {
-                    cout << "Sample " << n << "\t x = " << theSequencer.m_robot.xOfSample(n) << "\t y = " << theSequencer.m_robot.yOfSample(n) << endl;
+                    cout << "Sample " << n << "\t x = " << theSequencer.xOfSample(n) << "\t y = " << theSequencer.yOfSample(n) << endl;
                 }
                 break;
             //

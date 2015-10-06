@@ -356,6 +356,10 @@ vector<string> Ottomator::frameworkSequenceTo(bool initiate) // Initiate / Finis
     m_statusMatrix[2][0] = initiate;
     int error(0), sequence(2);
     vector<string> message;
+    stringstream ss;
+    string temp, readData;
+    int found;
+    bool closePlier;
 
     do
     {
@@ -366,13 +370,18 @@ vector<string> Ottomator::frameworkSequenceTo(bool initiate) // Initiate / Finis
         {
             // Check if plier is emplty
             case 1:
-                if(m_robot.getRobotPosition(OttoUtils::pAct) != 3) // If nothingInPlier, ouverture pince & Goto to Default position
+                // If somethingInPlier, fermeture pince & next. Else, ouverture pince & Goto to Default position
+                readData = m_robot.m_busManager.modbusReadData(OttoUtils::pAct, 0x03, 0x9000, 0x0002, 10);
+                ss << readData;
+                while(getline(ss, temp, '.'))
                 {
-                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::pAct, 1), error, 7); // Ouverture Pince -> puis aller à la position par défaut
-                } else
-                {
-                    ++m_statusMatrix[4][0];
+                    if(stringstream(temp) >> found)
+                    {   // write buffer
+                        (found > 300) ? closePlier = true : closePlier = false;
+                    }
                 }
+                // Fermeture Pince OR Ouverture Pince -> puis aller à la position par défaut
+                (closePlier) ? error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::pAct, 2), error) : error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::pAct, 1), error, 7);
                 break;
             // Putback current sample (!nothingInPlier)
             case 2:

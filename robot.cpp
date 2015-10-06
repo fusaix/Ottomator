@@ -283,7 +283,7 @@ void Robot::updateStatusOfCurrent(int actuator, int verbose) // Read and parse d
     string result;
     do
     {
-        result = m_busManager.modbusReadData(actuator, 0x3, wordAdress, 0x0001);
+        result = m_busManager.modbusReadData(actuator, 0x3, wordAdress, 0x0001, 2);
         if(result == "ERROR")
         {
             ++ trial;

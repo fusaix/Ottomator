@@ -57,9 +57,9 @@ public:
     Robot m_robot;
 
     // Task matrix definition getters
-    virtual   void           xyOfSample(int n, int& x, int& y);
-    inline    int            xOfSample(int n) { int x,y; xyOfSample(n, x, y); return x; }
-    inline    int            yOfSample(int n) { int x,y; xyOfSample(n, x, y); return y; }
+    virtual void  xyOfSample(int n, int& x, int& y);
+    inline  int   xOfSample(int n) { int x,y; xyOfSample(n, x, y); return x; }
+    inline  int   yOfSample(int n) { int x,y; xyOfSample(n, x, y); return y; }
 
 private:
     // State attributs

@@ -182,7 +182,7 @@ int BusManager::modbusWriteData(int slave, int functionCode, int startAddress, u
 }
 
 
-string BusManager::modbusReadData(int slave, int functionCode, int startAddress, int noOfItems, int verbose)
+string BusManager::modbusReadData(int slave, int functionCode, int startAddress, int noOfItems, int base, int verbose)
 {
     //if(verbose > 1) cout << "BusManager > [Info] " <<  "Modbus Read Data " << endl;
     if(verbose > 1) writeLog("BusManager > [Info] Modbus Read Data \n");
@@ -228,15 +228,26 @@ string BusManager::modbusReadData(int slave, int functionCode, int startAddress,
         for(int i = 0; i < noOfItems; ++i)
         {
             int data = is16Bit ? dest16[i] : dest[i];
-            result += (OttoUtils::numberToString(data) + " ");
-            binResult += (OttoUtils::decToBin(data, true) + " ");
+            result += (OttoUtils::numberToString(data) + ".");
+            binResult += (OttoUtils::decToBin(data, true) + ".");
         }        
         // Display result
         //if(verbose > 1) cout << OttoUtils::RxTimeStamp() <<  " : int data = " << result << endl;
         if(verbose > 1) writeLog(OttoUtils::RxTimeStamp() +  " : int data = " + result + "\n");
 
         // Return binResult
-        return binResult;
+        switch(base)
+        {
+            case 2:
+                return binResult;
+                break;
+            case 10:
+                return result;
+                break;
+            default:
+                return result;
+        }
+
     } else
     {
         m_errors += 1;
