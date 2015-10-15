@@ -304,6 +304,7 @@ void sequenceMenu(Ottomator& theSequencer)
     int sampleN(0), fetch(0), run(0), destination(1);
     Robot& R(theSequencer.m_robot);
     vector<string> messages;
+    int message;
     do
     {
         // Display list of commands
@@ -363,18 +364,22 @@ void sequenceMenu(Ottomator& theSequencer)
                 if(messages.size() != 0) if(overWriteM_sampleArray(messages)) inputSampleArray(theSequencer);
                 do
                 {   // Run cycler
-                    messages = theSequencer.cycler();
-                    for (unsigned int i = 0; i < messages.size(); ++i)
-                        (i%2) ? cout << messages[i] << ", " : cout << messages[i] << " ";
-                    cout << endl;
-                    if(messages[0] == "Need input")
+                    message = theSequencer.cycler();
+                    if(message < 0)
+                    {
+                        cout << "The message is: " << message << endl;
+                    } else
+                    {
+                        cout << "The message is: " << OttoUtils::decToBin(message) << endl;
+                    }
+                    if(message == Need_input)
                     {   // input
                         inputSampleArray(theSequencer);
                         run = 1;
-                    } else if(messages[0] == "Fetch completed")
+                    } else if(message == Fetch_completed)
                     {   // wait
                         run = measuringFinished();
-                    } else if(messages[0] == "Finish completed")
+                    } else if(message == Finish_completed)
                     {   // finish
                         run = 0;
                     } else

@@ -14,6 +14,34 @@
 #include "robot.h"
 #include "ottoutils.h"
 
+#define Stuck_in_birth_sequence         -1
+#define Stuck_in_initiation_sequence    -2
+#define Stuck_in_fetch_sequence         -3
+#define Stuck_in_putback_sequence       -4
+#define Stuck_in_finish_sequence        -5
+#define Sequence_case_out_of_range      -6
+#define Empty_catch                     -7
+#define Birth_completed                 -8
+#define Initiation_completed            -9
+#define Fetch_completed                 -10
+#define Putback_completed               -11
+#define Finish_completed                -12
+#define Need_input                      -13
+
+#define SV      1
+#define STP     2
+#define EMGS    4
+#define EMGV    8
+#define P1      16
+#define P2      32
+#define LAT     64
+#define ALML    128
+#define ALMH    256
+#define ABER    512
+#define MOTO    1024
+
+
+
 class Ottomator
 {
 public:
@@ -24,20 +52,20 @@ public:
     std::string getAllStatusesOfDSS1ForBit(int index, bool verbose = false);
     void updateM_StatusMatrix();
     void resetM_StatusMatrix();
-    std::vector<std::string> manageStatusGate();
+    int manageStatusGate();
     int manageNextFor(int sequence, int actionSuccess, int error, int specialIndex = 0, int specialManagement = 0);
 
     // Main Sequences
-    std::vector<std::string> birthSequence();
-    std::vector<std::string> frameworkSequenceTo(bool initiate);
-    std::vector<std::string> workSequenceTo(bool fetch, int sampleN);
+    int birthSequence();
+    int frameworkSequenceTo(bool initiate);
+    int workSequenceTo(bool fetch, int sampleN);
 
     // Messages
     virtual   const char*    GetErrorTextFrench(int i);
     //virtual   const char*    GetErrorTextEnglish(int i); // D'abord le français, mais après il faudra traduire
 
     // Demontrators
-    std::vector<std::string> cycler();
+    int cycler();
     void displayM_StatusMatrix();
 
     // Case getters and setters

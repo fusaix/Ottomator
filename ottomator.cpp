@@ -97,11 +97,11 @@ void Ottomator::resetM_StatusMatrix()
     for(int i=1; i < 6; ++i) m_statusMatrix[i][0] = 1; // 1..5
 }
 
-vector<string> Ottomator::manageStatusGate()
+int Ottomator::manageStatusGate()
 {
   int i;
-    vector<string> issueCoordinates(0);
-    int index(0), normalValue(0);
+    int issueMessage(0);
+    int index(0), normalValue(0), weight(0);
     // Get status matrix
     updateM_StatusMatrix();
     displayM_StatusMatrix(); /// test
@@ -112,31 +112,30 @@ vector<string> Ottomator::manageStatusGate()
         switch(i)
         {
             case 0: // EMGS?
-                index = 15; normalValue = 0;
+                index = 15; normalValue = 0; weight = EMGS;
                 break;
             case 1: // ALMH?
-                index = 10; normalValue = 0;
+                index = 10; normalValue = 0; weight = ALMH;
                 break;
             case 2: // ALML?
-                index = 9; normalValue = 0;
+                index = 9; normalValue = 0; weight = ALML;
                 break;
             case 3: // ABER?
-                index = 8; normalValue = 0;
+                index = 8; normalValue = 0; weight = ABER;
                 break;
             case 4: // STP?
-                index = 5; normalValue = 0;
+                index = 5; normalValue = 0; weight = STP;
                 break;
             case 5: // SV?
-                index = 12; normalValue = 1;
+                index = 12; normalValue = 1; weight = SV;
         }
 
         for(int actuator=1; actuator < 5 ; ++actuator)
         {
             if(m_statusMatrix[index][actuator] != normalValue)
             {
-                // record issue (index, actuator)
-                issueCoordinates.push_back(OttoUtils::numberToString(index));
-                issueCoordinates.push_back(OttoUtils::numberToString(actuator));
+                // record issue
+                issueMessage += weight;
             }
         }
     }
@@ -147,27 +146,26 @@ vector<string> Ottomator::manageStatusGate()
         switch(i)
         {
             case 0: // EMGV?
-                index = 2; normalValue = 1;
+                index = 2; normalValue = 1; weight = EMGV;
                 break;
             case 1: // MOTO?
-                index = 5; normalValue = 0;
+                index = 5; normalValue = 0; weight = MOTO;
                 break;
             case 2: // P1?
-                index = 3; normalValue = 0;
+                index = 3; normalValue = 0; weight = P1;
                 break;
             case 3: // P2?
-                index = 4; normalValue = 0;
+                index = 4; normalValue = 0; weight = P2;
                 break;
             case 4: // LAT?
-                index = 1; normalValue = 1;
+                index = 1; normalValue = 1; weight = LAT;
                 break;
         }
 
         if(m_statusMatrix[index][5] != normalValue)
         {
-            // record issue (index, actuator)
-            issueCoordinates.push_back(OttoUtils::numberToString(index));
-            issueCoordinates.push_back(OttoUtils::numberToString(5));
+            // record issue
+            issueMessage += weight;
         }
 
     }
@@ -175,7 +173,7 @@ vector<string> Ottomator::manageStatusGate()
     // Health checks
     // ...
 
-    return issueCoordinates;
+    return issueMessage;
 }
 
 
@@ -225,16 +223,16 @@ int Ottomator::manageNextFor(int sequence, int actionSuccess, int error, int spe
 /// --------------
 
 /// func --- 1
-vector<string> Ottomator::birthSequence()
+int Ottomator::birthSequence()
 {
     int error(0), sequence(1), i;
-    vector<string> message;
+    int intMessage;
 
     do
     {
-        message = manageStatusGate();
-        if(message.size() > 0 && message[0] != "12") return message;
-        message.clear();
+        intMessage = manageStatusGate();
+        if((intMessage & (~1)) != 0) return intMessage; // 000 0000 0001 (Only SV abnormal) OR 000 0000 0000 (All normal) // partsToDisable = 1;
+
         switch(m_statusMatrix[3][0])
         {
             // Activate MODBUS
@@ -283,7 +281,7 @@ vector<string> Ottomator::birthSequence()
                 {
                     m_statusMatrix[3][0] = 11; // birth completion flag
                     writeLog("Birth completed\n");
-                    message.push_back("Birth completed"); return message;
+                    return Birth_completed;
                 } else
                 {
                     ++ m_statusMatrix[3][0];
@@ -339,23 +337,25 @@ vector<string> Ottomator::birthSequence()
                 {
                     m_statusMatrix[3][0] = 11; // birth completion flag
                     writeLog("Birth completed\n");
-                    message.push_back("Birth completed"); return message;
+                    return Birth_completed;
                 }
                 break;
             default:
-                message.push_back("Ottomator > [Error] m_statusMatrix[3][0] is out of range = " + m_statusMatrix[3][0]); return message;
+                writeLog("Ottomator > [Error] m_statusMatrix[3][0] is out of range = " + OttoUtils::numberToString(m_statusMatrix[3][0]) + "\n");
+                return Sequence_case_out_of_range;
         }
     } while(error < 5);
-    message.push_back("Ottomator > [Error] Birth sequence stuck on case " + OttoUtils::numberToString(m_statusMatrix[3][0])); return message;
+    writeLog("Ottomator > [Error] Birth sequence stuck on case " + OttoUtils::numberToString(m_statusMatrix[3][0]) + "\n");
+    return Stuck_in_birth_sequence;
 }
 
 
 /// func --- 2
-vector<string> Ottomator::frameworkSequenceTo(bool initiate) // Initiate / Finish
+int Ottomator::frameworkSequenceTo(bool initiate) // Initiate / Finish
 {
     m_statusMatrix[2][0] = initiate;
     int error(0), sequence(2);
-    vector<string> message;
+    int intMessage;
     stringstream ss;
     string temp, readData;
     int found;
@@ -363,9 +363,9 @@ vector<string> Ottomator::frameworkSequenceTo(bool initiate) // Initiate / Finis
 
     do
     {
-        message = manageStatusGate();
-        if(message.size() > 0) return message;
-        message.clear();
+        intMessage = manageStatusGate();
+        if(intMessage != 0) return intMessage;
+
         switch(m_statusMatrix[4][0])
         {
             // Check if plier is emplty
@@ -416,7 +416,8 @@ vector<string> Ottomator::frameworkSequenceTo(bool initiate) // Initiate / Finis
                 if(m_statusMatrix[2][0])
                 {
                     m_statusMatrix[4][0] = 1; m_statusMatrix[2][0] = -1; // Initiation completion flag
-                    message.push_back("Initiation completed"); return message;
+                    writeLog("Initiation completed\n");
+                    return Initiation_completed;
                 }
                 error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::vAct, 2), error); // Fermeture porte château
                 break;
@@ -428,7 +429,8 @@ vector<string> Ottomator::frameworkSequenceTo(bool initiate) // Initiate / Finis
                 error = 0;
                 resetM_StatusMatrix(); // Batch completed, reset statuses
                 m_sampleArray.clear(); // Clear task list
-                message.push_back("Finish completed"); return message; // Château fermé, servoOFF : Fin de la séquence.
+                writeLog("Finish completed\n"); // Château fermé, servoOFF : Fin de la séquence.
+                return Finish_completed;
             } else
             {
                 //cout << "Ottomator > [Error] : Servo OFF failed" << endl;
@@ -437,26 +439,33 @@ vector<string> Ottomator::frameworkSequenceTo(bool initiate) // Initiate / Finis
             }
         }
     } while(error < 5);
-    message.push_back("Ottomator > [Error] Framework sequence stuck on case " + OttoUtils::numberToString(m_statusMatrix[4][0]) + ", isInitiating = " + OttoUtils::numberToString(m_statusMatrix[2][0])); return message;
+    writeLog("Ottomator > [Error] Framework sequence stuck on case " + OttoUtils::numberToString(m_statusMatrix[4][0]) + ", isInitiating = " + OttoUtils::numberToString(m_statusMatrix[2][0]) + "\n");
+    if(m_statusMatrix[2][0]) // isInitiating
+    {
+        return Stuck_in_initiation_sequence;
+    } else
+    {
+        return Stuck_in_finish_sequence;
+    }
 }
 
 
 /// func --- 3
-vector<string> Ottomator::workSequenceTo(bool fetch, int sampleN) // bool fetch = true; Cas IW demande à chercher l'échantillon (false = reposer) // int sampleN = 1; Cas échantillon 1
+int Ottomator::workSequenceTo(bool fetch, int sampleN) // bool fetch = true; Cas IW demande à chercher l'échantillon (false = reposer) // int sampleN = 1; Cas échantillon 1
 {
     // Initiate work
     m_statusMatrix[1][0] = fetch;
     m_statusMatrix[0][0] = sampleN;
     int error(0), sequence(3);
-    vector<string> message;
+    int intMessage;
 
     /// workSequence
     /// while ---
     do
     {
-        message = manageStatusGate();
-        if(message.size() != 0) return message;
-        message.clear();
+        intMessage = manageStatusGate();
+        if(intMessage != 0) return intMessage;
+
         switch(m_statusMatrix[5][0])
         {
             // Prepare
@@ -552,7 +561,8 @@ vector<string> Ottomator::workSequenceTo(bool fetch, int sampleN) // bool fetch 
                     {
                         m_statusMatrix[2][0] = 0; // isInitiating = 0
                     }
-                    message.push_back("Putback completed"); return message; // Echantillon reposé : Fin de la séquence.
+                    writeLog("Putback completed\n"); // Echantillon reposé : Fin de la séquence.
+                    return Putback_completed;
                 }
                 // fetch
                 error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::xAct, xOfSample(POSITION_REST)), error); // Positionnement emplacement Attente en x
@@ -566,13 +576,21 @@ vector<string> Ottomator::workSequenceTo(bool fetch, int sampleN) // bool fetch 
                     if(error == 0)
                     {
                         m_statusMatrix[5][0] = 1; m_statusMatrix[1][0] = 0; // fetch completion flag
-                        message.push_back("Fetch completed"); return message; // Château fermé : Fin de la séquence.
+                        writeLog("Fetch completed\n"); // Château fermé : Fin de la séquence.
+                        return Fetch_completed;
                     }
                 }
                 break;
         }
     } while(error < 5);
-    message.push_back("Ottomator > [Error] Work sequence stuck on case " + OttoUtils::numberToString(m_statusMatrix[5][0]) + ", isFetching = " + OttoUtils::numberToString(m_statusMatrix[1][0])); return message;
+    writeLog("Ottomator > [Error] Work sequence stuck on case " + OttoUtils::numberToString(m_statusMatrix[5][0]) + ", isFetching = " + OttoUtils::numberToString(m_statusMatrix[1][0]) +"\n");
+    if(m_statusMatrix[1][0]) // isFetching
+    {
+        return Stuck_in_fetch_sequence;
+    } else
+    {
+        return Stuck_in_putback_sequence;
+    }
 }
 
 
@@ -580,23 +598,22 @@ vector<string> Ottomator::workSequenceTo(bool fetch, int sampleN) // bool fetch 
 /// Demontrators
 /// ------------
 
-vector<string> Ottomator::cycler()
+int Ottomator::cycler()
 {
-    vector<string> messages;
+    int message;
     while(m_sampleArray.size() > 0)
     {
-        messages.clear();
         if(m_statusMatrix[3][0] != 11)
         {
-            messages = birthSequence(); // birthSequence()
-            if(messages[0] != "Birth completed") return messages;
+            message = birthSequence(); // birthSequence()
+            if(message != Birth_completed) return message;
         } else
         {
             switch(m_statusMatrix[2][0])
             {
                 case 1:
-                    messages = frameworkSequenceTo(true); // frameworkSequenceTo(initiate)
-                    if(messages[0] != "Initiation completed") return messages;
+                    message = frameworkSequenceTo(true); // frameworkSequenceTo(initiate)
+                    if(message != Initiation_completed) return message;
                     break;
                 case -1:
                     // cout << "############################################## " << atoi(m_sampleArray[0].c_str()) << endl; /// test
@@ -605,8 +622,8 @@ vector<string> Ottomator::cycler()
                         return workSequenceTo(true, atoi(m_sampleArray[0].c_str())); // workSequenceTo(fetch, new nCurrentSample)
                     } else
                     {
-                        messages = workSequenceTo(false, m_statusMatrix[0][0]); // workSequenceTo(putback, old nCurrentSample)
-                        if(messages[0] != "Putback completed") return messages;
+                        message = workSequenceTo(false, m_statusMatrix[0][0]); // workSequenceTo(putback, old nCurrentSample)
+                        if(message != Putback_completed) return message;
                     }
                     break;
                 case 0:
@@ -614,8 +631,10 @@ vector<string> Ottomator::cycler()
             }
         }
     }
-    messages.push_back("Need input"); return messages;
+    writeLog("Need input\n");
+    return Need_input;
 }
+
 
 void Ottomator::displayM_StatusMatrix()
 {
