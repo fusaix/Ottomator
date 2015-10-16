@@ -162,7 +162,7 @@ public:
         return ss.str();
     }
 
-    static std::string decToBin(int number, bool littleEndianFirst = 0)
+    static std::string decToBin(int number, bool littleEndianFirst = false)
     {
         std::string result = "";
         do

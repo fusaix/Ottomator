@@ -22,13 +22,11 @@ BusManager::BusManager() :
     m_errors(0),
     m_packets(0)
 {
-    //cout << "The BusManager is created." << endl;
     writeLog("The BusManager is created.\n");
 }
 
 BusManager::~BusManager()
 {
-    //cout << "The BusManager is dead." << endl;
     writeLog("The BusManager is dead.\n");
 }
 
@@ -38,12 +36,10 @@ void BusManager::modbusConnectRTU(std::string port)
     string line;
     modbusDisConnect();
 
-    //cout << "BusManager > [Info] " <<  "Modbus Connect RTU" << endl;
     writeLog("BusManager > [Info] Modbus Connect RTU\n");
 
     m_modbus = modbus_new_rtu(port.c_str(), 115200, 'N', 8, 1, MODBUS_RTU_RTS_NONE);
     line = "Connecting to Serial Port [" + port + "]...";
-    //cout << "BusManager > [Info] " <<  line << endl;
     writeLog("BusManager > [Info] " + line +"\n");
 
     //Debug messages from libmodbus
@@ -52,7 +48,6 @@ void BusManager::modbusConnectRTU(std::string port)
     #endif
 
     if(m_modbus && modbus_connect(m_modbus) == -1) {
-        //cout << "BusManager > [Error] " <<  "Connection failed. Could not connect to serial port" << endl;
         writeLog("BusManager > [Error] Connection failed. Could not connect to serial port\n");
         m_connected = false;
         line += "Failed";
@@ -60,12 +55,10 @@ void BusManager::modbusConnectRTU(std::string port)
     else {
         m_connected = true;
         line += "OK";
-        //cout << "BusManager > [Info] " <<  line << endl;
         writeLog("BusManager > [Info] " +  line + "\n");
     }
 
     //Add timeline
-    //cout << OttoUtils::SysTimeStamp() << " : " << line << endl;
     writeLog(OttoUtils::SysTimeStamp() + " : " + line + "\n");
 
 }
@@ -74,7 +67,6 @@ void BusManager::modbusConnectRTU(std::string port)
 void BusManager::modbusDisConnect()
 {
     //Modbus disconnect
-    //cout <<  "Modbus disconnected" << endl;
     writeLog("Modbus disconnected\n");
 
     if(m_modbus) {
@@ -95,7 +87,6 @@ bool BusManager::isConnected()
 
 int BusManager::modbusWriteData(int slave, int functionCode, int startAddress, uint16_t data, int verbose)
 {
-    //if(verbose > 1) cout << "BusManager > [Info] " << "Modbus Write Data " << endl;
     if(verbose > 1) writeLog("BusManager > [Info] Modbus Write Data \n");
 
     if(m_modbus == NULL) return 0;
@@ -144,14 +135,12 @@ int BusManager::modbusWriteData(int slave, int functionCode, int startAddress, u
             break;
     }
 
-    //if(verbose > 1) cout << "BusManager > [Info] " <<  "Modbus Write Data return value = " << ret << endl;
     if(verbose > 1) writeLog("BusManager > [Info] Modbus Write Data return value = " + OttoUtils::numberToString(ret) + "\n");
 
     //update data model
     if(ret == 1) //noOfItems = 1
     {
         //values written correctly
-        //if(verbose > 1) cout << OttoUtils::SysTimeStamp() << " : values written correctly." << endl;
         if(verbose > 1) writeLog(OttoUtils::SysTimeStamp() + " : values written correctly." + "\n");
         return ret;
     } else
@@ -170,8 +159,6 @@ int BusManager::modbusWriteData(int slave, int functionCode, int startAddress, u
         else {
             line = string("Number of registers returned does not match number of registers requested!. [")  +  modbus_strerror(errno) + "]";
         }
-        //if(verbose > 0) cout << "BusManager > [Error] " <<  "Modbus Write Data failed. " << endl;
-        //if(verbose > 0) cout << OttoUtils::SysTimeStamp() << " : " << line << endl;
         if(verbose > 0) writeLog("BusManager > [Error] Modbus Write Data failed. \n");
         if(verbose > 0) writeLog(OttoUtils::SysTimeStamp() + " : " + line + "\n");
 
@@ -184,7 +171,6 @@ int BusManager::modbusWriteData(int slave, int functionCode, int startAddress, u
 
 string BusManager::modbusReadData(int slave, int functionCode, int startAddress, int noOfItems, int base, int verbose)
 {
-    //if(verbose > 1) cout << "BusManager > [Info] " <<  "Modbus Read Data " << endl;
     if(verbose > 1) writeLog("BusManager > [Info] Modbus Read Data \n");
 
     if(m_modbus == NULL) return 0;
@@ -217,7 +203,6 @@ string BusManager::modbusReadData(int slave, int functionCode, int startAddress,
             break;
     }
 
-    //if(verbose > 1) cout << "BusManager > [Info] " <<  "Modbus Read Data return value = " << ret << endl;
     if(verbose > 1) writeLog("BusManager > [Info] Modbus Read Data return value = " + OttoUtils::numberToString(ret) + "\n");
 
     //update data model
@@ -232,7 +217,6 @@ string BusManager::modbusReadData(int slave, int functionCode, int startAddress,
             binResult += (OttoUtils::decToBin(data, true) + ".");
         }        
         // Display result
-        //if(verbose > 1) cout << OttoUtils::RxTimeStamp() <<  " : int data = " << result << endl;
         if(verbose > 1) writeLog(OttoUtils::RxTimeStamp() +  " : int data = " + result + "\n");
 
         // Return binResult
@@ -260,8 +244,6 @@ string BusManager::modbusReadData(int slave, int functionCode, int startAddress,
         {
             line = string("Number of registers returned does not match number of registers requested!. [")  +  modbus_strerror(errno) + "]";
         }
-        //if(verbose > 0) cout << "BusManager > [Error] " <<  "Modbus Read Data failed. "  << endl;
-        //if(verbose > 0) cout << OttoUtils::SysTimeStamp() << " : " << line << endl;
         if(verbose > 0) writeLog("BusManager > [Error] Modbus Read Data failed. \n");
         if(verbose > 0) writeLog(OttoUtils::SysTimeStamp() + " : " + line + "\n");
 
@@ -284,15 +266,12 @@ void BusManager::busDataMonitor(string mode, uint8_t* data, uint8_t dataLen)
 
     if(mode == "TX")
     {
-        //cout << OttoUtils::TxTimeStamp() << " :"  << line  << endl;
         writeLog(OttoUtils::TxTimeStamp() + " : " + line + "\n");
     } else if(mode == "RX")
     {
-        //cout << OttoUtils::RxTimeStamp() << " :"  << line  << endl;
         writeLog(OttoUtils::RxTimeStamp() + " : " + line + "\n");
     } else
     {
-        //cout << "BusManager > [Error] : busDataMonitor mode unrecognized" << endl;
         writeLog("BusManager > [Error] : busDataMonitor mode unrecognized\n");
     }
 }

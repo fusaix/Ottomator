@@ -191,7 +191,7 @@ void elementaryMenu(Ottomator& theSequencer)
                 break;
             // 9 -
             case '9':
-                theSequencer.m_robot.m_busManager.modbusReadData(OttoUtils::pAct, 0x03, 0x9000, 2, 10, 2);
+                theSequencer.m_robot.m_busManager.modbusReadData(OttoUtils::xAct, 0x03, 0x9000, 2, 10, 2);
                 break;
             case '0':
                 command = 0;
@@ -289,11 +289,11 @@ bool overWriteM_sampleArray(vector<string> &messages)
 
 bool measuringFinished()
 {
-    bool run(0);
+    string ans;
     cout << "You can know measure..." << endl;
     cout << "Measuring finished? (1) / Abort? (0) ";
-    cin >> run;
-    return run;
+    cin >> ans;
+    return (ans != "0");
 }
 
 
@@ -304,7 +304,9 @@ void sequenceMenu(Ottomator& theSequencer)
     int sampleN(0), fetch(0), run(0), destination(1);
     Robot& R(theSequencer.m_robot);
     vector<string> messages;
+    string binMessage;
     int message;
+
     do
     {
         // Display list of commands
@@ -368,9 +370,20 @@ void sequenceMenu(Ottomator& theSequencer)
                     if(message < 0)
                     {
                         cout << "The message is: " << message << endl;
+                        run = 1;
                     } else
                     {
-                        cout << "The message is: " << OttoUtils::decToBin(message) << endl;
+                        cout << "                SV\t" << "STP\t" << "EMGS\t" << "EMGV\t" << "P1\t" << "P2\t" << "LAT\t" << "ALML\t"
+                             << "ALMH*\t" << "ABER*\t" << "MOTO*\t" << "XCAS*\t" << endl;
+                        cout << "The message is: ";
+                        binMessage = OttoUtils::decToBin(message, true);
+                        for(unsigned int i=0; i<12; ++i)
+                        {
+                            (i < binMessage.length()) ? cout << binMessage[i] : cout << "0";
+                            cout << "\t";
+                        }
+                        cout << endl;
+                        run = 0;
                     }
                     if(message == Need_input)
                     {   // input
@@ -435,6 +448,8 @@ int main()
     // Connect to serial port
     cout << "Now you have to connect to the right serial port. ";
     connectToMobus(theSequencer);
+
+    theSequencer.m_robot.m_busManager.modbusWriteData(OttoUtils::vAct, 0x6, 0x0001, 0x00); /// Secure motion stop
 
     char command(0);
     do

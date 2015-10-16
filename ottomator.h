@@ -39,7 +39,7 @@
 #define ALMH    256
 #define ABER    512
 #define MOTO    1024
-
+#define XCAS    2048
 
 
 class Ottomator
@@ -54,6 +54,7 @@ public:
     void resetM_StatusMatrix();
     int manageStatusGate();
     int manageNextFor(int sequence, int actionSuccess, int error, int specialIndex = 0, int specialManagement = 0);
+    bool allServo(bool onOff);
 
     // Main Sequences
     int birthSequence();
@@ -62,7 +63,7 @@ public:
 
     // Messages
     virtual   const char*    GetErrorTextFrench(int i);
-    //virtual   const char*    GetErrorTextEnglish(int i); // D'abord le français, mais après il faudra traduire
+    //virtual   const char*    GetErrorTextEnglish(int i); // D'abord le francais, mais apres il faudra traduire
 
     // Demontrators
     int cycler();

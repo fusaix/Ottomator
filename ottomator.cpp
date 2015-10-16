@@ -18,14 +18,12 @@ Ottomator::Ottomator()
     // Init status matrix
     resetM_StatusMatrix();
 
-    //cout << "The Ottomator is created." << endl;
     writeLog("The Ottomator is created.\n");
 }
 
 
 Ottomator::~Ottomator()
 {
-    //cout << "The Ottomator is dead." << endl;
     writeLog("The Ottomator is dead.\n");
 }
 
@@ -46,7 +44,7 @@ string Ottomator::getAllStatusesOfDSS1ForBit(int index, bool verbose)
         //cout << "The " << symbols[index] << " statuses are:" << endl;
         writeLog("The " + symbols[index] + " statuses are:\n");
         //cout << "x \t" << "y \t" << "z \t" << "p" << endl; // "v" is special, not included in this method
-        writeLog("x \t y \t z \t p \n");
+        writeLog("x \ty \tz \tp \n");
         for(unsigned int i=0; i < statuses.length(); ++i)
         {
             //cout << statuses[i] << "\t";
@@ -102,6 +100,7 @@ int Ottomator::manageStatusGate()
   int i;
     int issueMessage(0);
     int index(0), normalValue(0), weight(0);
+    bool rec;
     // Get status matrix
     updateM_StatusMatrix();
     displayM_StatusMatrix(); /// test
@@ -109,6 +108,7 @@ int Ottomator::manageStatusGate()
     // Gate checks IAI
     for(i=0; i<6; ++i)
     {
+        rec = false;
         switch(i)
         {
             case 0: // EMGS?
@@ -129,15 +129,12 @@ int Ottomator::manageStatusGate()
             case 5: // SV?
                 index = 12; normalValue = 1; weight = SV;
         }
-
         for(int actuator=1; actuator < 5 ; ++actuator)
         {
-            if(m_statusMatrix[index][actuator] != normalValue)
-            {
-                // record issue
-                issueMessage += weight;
-            }
+            if(m_statusMatrix[index][actuator] != normalValue) rec = true;
         }
+        // record issue
+        if (rec) issueMessage += weight;
     }
 
     // Gate checks V
@@ -163,8 +160,7 @@ int Ottomator::manageStatusGate()
         }
 
         if(m_statusMatrix[index][5] != normalValue)
-        {
-            // record issue
+        {   // record issue
             issueMessage += weight;
         }
 
@@ -180,9 +176,15 @@ int Ottomator::manageStatusGate()
 int Ottomator::manageNextFor(int sequence, int actionSuccess, int error, int specialIndex, int specialManagement)
 {
     if(specialIndex != 0) sequence+=3;
-    if(specialManagement)
+    if(specialManagement > 0)
     {   // Special management
-        // ...
+        if(specialManagement == 1 && actionSuccess == Position_completed) // if x goes to castel and PEND
+        {   // then fatal error
+            return XCAS;
+        }
+
+        // if p goes to close and PSFL then empty catch
+        //... (not implemented for the moment)
 
     }
     if(actionSuccess > 0) // 1 = position completed / catch successful (PEND), 2 = push completed without obstacle (PSFL Missed work part)
@@ -217,7 +219,15 @@ int Ottomator::manageNextFor(int sequence, int actionSuccess, int error, int spe
     return error;
 }
 
-
+bool Ottomator::allServo(bool onOff)
+{
+    bool ret(1);
+    for(int actuator=1; actuator<5; ++actuator) // 1..4
+    {
+        ret &= m_robot.servo(onOff, actuator);
+    }
+    return ret;
+}
 
 /// Main Sequences
 /// --------------
@@ -251,15 +261,13 @@ int Ottomator::birthSequence()
             case 1:
                 if(!(m_statusMatrix[12][1] && m_statusMatrix[12][2] && m_statusMatrix[12][3] && m_statusMatrix[12][4]))
                 {
-                    if(m_robot.servo(1, OttoUtils::xAct) && m_robot.servo(1, OttoUtils::yAct) && m_robot.servo(1, OttoUtils::zAct) && m_robot.servo(1, OttoUtils::pAct))
+                    if(allServo(1))
                     {
                         ++m_statusMatrix[3][0]; error = 0;
-                        //cout << "All Servo ON" << endl;
                         writeLog("All Servo ON\n");
                     } else
                     {
                         ++ error;
-                        //cout << "Ottomator > [Error] : Servo ON failed" << endl;
                         writeLog("Ottomator > [Error] : Servo ON failed\n");
                         getAllStatusesOfDSS1ForBit(12, true); // SV: Servo ON status
                     }
@@ -288,8 +296,6 @@ int Ottomator::birthSequence()
                 }
                 break;
             case 3:
-                //m_robot.updatestatusOfCurrent(OttoUtils::zAct);
-                //if(m_robot.getDeviceDataStatusRegister1Bit(4)) // HEND Home return complete, thus homing is useless
                 if(m_statusMatrix[4][3]) // HEND Home return complete, thus homing is useless
                 {
                     error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::zAct, 1), error); // Remontée Z
@@ -305,8 +311,6 @@ int Ottomator::birthSequence()
                 error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::vAct, 1), error); // Ouverture porte château
                 break;
             case 6:
-                //m_robot.updatestatusOfCurrent(OttoUtils::xAct);
-                //if(m_robot.getDeviceDataStatusRegister1Bit(4)) // HEND Home return complete, thus homing is useless
                 if(m_statusMatrix[4][1]) // HEND Home return complete, thus homing is useless
                 {
                     ++m_statusMatrix[3][0]; error = 0;
@@ -377,7 +381,7 @@ int Ottomator::frameworkSequenceTo(bool initiate) // Initiate / Finish
                 {
                     if(stringstream(temp) >> found)
                     {   // write buffer
-                        (found > 300) ? closePlier = true : closePlier = false;
+                        closePlier = (found > 300);
                     }
                 }
                 // Fermeture Pince OR Ouverture Pince -> puis aller à la position par défaut
@@ -424,7 +428,7 @@ int Ottomator::frameworkSequenceTo(bool initiate) // Initiate / Finish
 
             // Servo OFF
             case 11:
-            if(m_robot.servo(0, OttoUtils::xAct) && m_robot.servo(0, OttoUtils::yAct) && m_robot.servo(0, OttoUtils::zAct) && m_robot.servo(0, OttoUtils::pAct))
+            if(allServo(0))
             {
                 error = 0;
                 resetM_StatusMatrix(); // Batch completed, reset statuses
@@ -495,7 +499,8 @@ int Ottomator::workSequenceTo(bool fetch, int sampleN) // bool fetch = true; Cas
                     error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::yAct, yOfSample(m_statusMatrix[0][0])), error); // Positionnement emplacement m_statusMatrix[0][0] en y
                 } else
                 {	// putback
-                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::xAct, xOfSample(POSITION_DETECTOR)), error); // Positionnement emplacement Château en x
+                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::xAct, xOfSample(POSITION_DETECTOR)), error, 0, 1); // Positionnement emplacement Château en x
+                    if(error == XCAS) {m_robot.setPosition(OttoUtils::xAct, xOfSample(POSITION_ZERO)); return XCAS;} // fatal error
                 }
                 break;
 
@@ -530,7 +535,8 @@ int Ottomator::workSequenceTo(bool fetch, int sampleN) // bool fetch = true; Cas
             case 10:
                 if(m_statusMatrix[1][0])
                 {	// fetch
-                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::xAct, xOfSample(POSITION_DETECTOR)), error); // Positionnement emplacement Château en x
+                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::xAct, xOfSample(POSITION_DETECTOR)), error, 0, 1); // Positionnement emplacement Château en x
+                    if(error == XCAS) {m_robot.setPosition(OttoUtils::xAct, xOfSample(POSITION_ZERO)); return XCAS;} // fatal error
                 } else
                 {	// putback
                     error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::yAct, yOfSample(m_statusMatrix[0][0])), error); // Positionnement emplacement m_statusMatrix[0][0] en y

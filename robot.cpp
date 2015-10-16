@@ -27,7 +27,6 @@ Robot::Robot()
     {
         deviceDataStatusRegister1[i] = false;
     }
-    //cout << "The Robot is created." << endl;
     writeLog("The Robot is created.\n");
 }
 
@@ -45,6 +44,15 @@ int Robot::setPosition(int actuator, int position, int timeOut)
     switch(actuator)
     {
         case OttoUtils::xAct:
+            if((position == 6)) // if go to castel ...
+            {
+                updateStatusOfCurrent(OttoUtils::vAct);
+                if(getDeviceDataStatusRegister1Bit(2) && getDeviceDataStatusRegister1Bit(6)) // ... and castel not opended
+                {
+                    writeLog("Robot > [Error] Castel not opened, cannot go to castel! \n");
+                    return Issue_detected;
+                }
+            }
         case OttoUtils::yAct:
         case OttoUtils::zAct:
             max = 6;
@@ -65,13 +73,12 @@ int Robot::setPosition(int actuator, int position, int timeOut)
                 default:
                     max = 2;
             }
-            if(open != -1) return setCastelPositionTo(open, timeOut); // 0 = time out, 1 = position completed ### TimeOut Château à mesurer.
+            if(open != -1) return setCastelPositionTo(open); // 0 = time out, 1 = position completed ### TimeOut Château à mesurer = 13s (13000)
     }
     if(position > max)
     {
-        //cout << "Robot > [Error] setPosition - position unrecognized" << endl;
         writeLog("Robot > [Error] setPosition - position unrecognized\n");
-        return 3; // 3 = input error
+        return Input_error; // -3 = input error
     }
     int ret[4];
     // Select task
@@ -92,26 +99,54 @@ int Robot::setPosition(int actuator, int position, int timeOut)
         return completionFor(actuator, position, OttoUtils::position, timeOut); // 0 = time out, 1 = position completed / catch successful (PEND), 2 = push completed without obstacle (PSFL Missed work part)
     } else
     {
-        return -1; // -1 = writing error
+        return Writing_error; // -1 = writing error
     }
 }
 
 int Robot::setCastelPositionTo(bool open, int timeOut)
 {
     int data, ret, actionBitIndex;
+
+    stringstream ss;
+    string temp, readData;
+    int found(0), f(0), i(0);
+    bool dangerZone(true);
+    readData = m_busManager.modbusReadData(OttoUtils::xAct, 0x03, 0x9000, 0x0002, 10);
+    ss << readData;
+    while(getline(ss, temp, '.'))
+    {   ++i;
+        if(stringstream(temp) >> found)
+        {   // write buffer
+            if(i == 1) f = found*65536;
+            if(i == 2) found += f;
+            dangerZone = (found < 45000);
+        }
+    }
+
     if(open)
     {
         data = 0x1; // binary = 01 (write 0x0001 bit 0)
         actionBitIndex = 6; // (read 0x0000 bit 6)
+    } else if (dangerZone) // if X in danger zone then cannot close
+    {
+        writeLog("Robot > [Error] X in danger zone, cannot close castel! \n");
+        return Issue_detected; // -2 = Issue detected
     } else
     {
         data = 0x2; // binary = 10 (write 0x0001 bit 1)
         actionBitIndex = 7; // (read 0x0000 bit 7)
     }
 
+    updateStatusOfCurrent(OttoUtils::vAct);
     Sleep(50);
-    ret = m_busManager.modbusWriteData(OttoUtils::vAct, 0x6, 0x0001, data); // WriteSingleReg // Castel intput on address 0x0001
-    if(ret !=1) return -1; // -1 = writing error
+    if(getDeviceDataStatusRegister1Bit(actionBitIndex)) // read 0x0000 bit 6 for open status, 7 for close status (0 = reached or EMGV), if not reached or EMGV then do motion else clear motion
+    {   // Perform motion
+        ret = m_busManager.modbusWriteData(OttoUtils::vAct, 0x6, 0x0001, data); // WriteSingleReg // Castel intput on address 0x0001
+    } else
+    {   // Clear motion
+        ret = m_busManager.modbusWriteData(OttoUtils::vAct, 0x6, 0x0001, 0x00); // WriteSingleReg // Castel intput on address 0x0001
+    }
+    if(ret !=1) return Writing_error; // -1 = writing error
 
     int tau(1000);
     int timer(0);
@@ -126,28 +161,27 @@ int Robot::setCastelPositionTo(bool open, int timeOut)
                 getDeviceDataStatusRegister1Bit(5) ||
                 (!getDeviceDataStatusRegister1Bit(6) && !getDeviceDataStatusRegister1Bit(7))) // Issue capture
         {
-            //cout << "Robot > [Error] Issue detected ! " << endl;
-            writeLog("Robot > [Error] Issue detected ! \n");
-            return 0;
+            m_busManager.modbusWriteData(OttoUtils::vAct, 0x6, 0x0001, 0x00); /// Secure motion stop
+            writeLog("Robot > [Error] Issue detected! \n");
+            return Issue_detected; // -2 = Issue detected
         }
         if(!getDeviceDataStatusRegister1Bit(actionBitIndex)) // !!!!!! read 0x0000 bit 6 for open status, 7 for close status (0 = reached)
         {
             if(open)
             {
-                //cout << "Robot > [Info] Castel OPENED." << endl;
                 writeLog("Robot > [Info] Castel OPENED.\n");
                 setRobotPosition(OttoUtils::vAct, 1);
             } else
             {
-                //cout << "Robot > [Info] Castel CLOSED." << endl;
                 writeLog("Robot > [Info] Castel CLOSED.\n");
                 setRobotPosition(OttoUtils::vAct, 2);
             }
             // Stop motion
+            Sleep(50);
             ret = m_busManager.modbusWriteData(OttoUtils::vAct, 0x6, 0x0001, 0x00); // WriteSingleReg // Castel intput on address 0x0001
-            if(ret !=1) return -1; // -1 = writing error
+            if(ret !=1) return Writing_error; // -1 = writing error
 
-            return 1; // 1 = position completed
+            return Position_completed; // 1 = position completed
         } else
         {
             timer += tau;
@@ -156,9 +190,8 @@ int Robot::setCastelPositionTo(bool open, int timeOut)
                 //cout << "Robot > [Error] Time out! " << endl;
                 writeLog("Robot > [Error] Time out! \n");
                 setRobotPosition(OttoUtils::vAct, 0);
-                return 0; // 0 = time out
+                return Time_out; // 0 = time out
             }
-            //cout << "Robot > [Info] " << timer/1000 << "s elapsed..." << endl;
             writeLog("Robot > [Info] " + OttoUtils::numberToString(timer/1000) + "s elapsed...\n");
         }
     }
@@ -177,7 +210,6 @@ bool Robot::jog(int actuator, int direction, int duration)
             startAddress = 0x0416;
             break;
         default:
-        //cout << "Robot > [Error] Jog - direction unrecognized" << endl;
         writeLog("Robot > [Error] Jog - direction unrecognized\n");
         return false;
     }
@@ -194,7 +226,6 @@ bool Robot::homing(int actuator)
 {
     if(actuator == OttoUtils::yAct)
     {
-        //cout << "Robot > [Info] Homing does not apply for this actuator" << endl;
         writeLog("Robot > [Info] Homing does not apply for this actuator\n");
         return false;
     }
@@ -208,7 +239,7 @@ bool Robot::homing(int actuator)
 
 void Robot::alarmReset(int actuator)
 {
-    Sleep(100);
+    Sleep(50);
     m_busManager.modbusWriteData(actuator, 0x5, 0x0407, 0xFF00); // WriteSingleCoil
     Sleep(50);
     m_busManager.modbusWriteData(actuator, 0x5, 0x0407, 0x0000); // WriteSingleCoil
@@ -235,41 +266,35 @@ int Robot::completionFor(int actuator, int position, int actionBitIndex, int tim
                 getDeviceDataStatusRegister1Bit(8) ||
                 getDeviceDataStatusRegister1Bit(5)) // Issue capture
         {
-            //cout << "Robot > [Error] Issue detected ! " << endl;
-            writeLog("Robot > [Error] Issue detected ! \n");
-            return 0;
+            writeLog("Robot > [Error] Issue detected! \n");
+            return Issue_detected; // -2 = Issue detected
         }
         if(getDeviceDataStatusRegister1Bit(11)) // !!!!!! read 0x9005 bit 11 for Missed work part in push-motion operation
         {
-            //cout << "Robot > [Info] PSFL = 1." << endl;
             writeLog("Robot > [Info] PSFL = 1.\n");
             if(actuator == OttoUtils::pAct) setRobotPosition(OttoUtils::pAct, 3); // catch successful !!!
-            return 2;
+            return Return_PSFL;
         }
         if(getDeviceDataStatusRegister1Bit(actionBitIndex)) // !!!!!! read 0x9005 bit 3 for position, 4 for homing
         {
             if(actionBitIndex == 3)
             {
-                //cout << "Robot > [Info] PEND = 1." << endl;
                 writeLog("Robot > [Info] PEND = 1.\n");
             } else
             {
-                //cout << "Robot > [Info] HEND = 1." << endl;
                 writeLog("Robot > [Info] HEND = 1.\n");
             }
             // setRobotPosition !!!
             setRobotPosition(actuator, position);
-            return 1;
+            return Position_completed;
         } else
         {
             timer += tau;
             if (timer > timeOut)
             {
-                //cout << "Robot > [Error] Time out! " << endl;
                 writeLog("Robot > [Error] Time out! \n");
-                return 0;
+                return Time_out;
             }
-            //cout << "Robot > [Info] " << timer/1000 << "s elapsed..." << endl;
             writeLog("Robot > [Info] " + OttoUtils::numberToString(timer/1000) + "s elapsed...\n");
         }
     }
@@ -283,6 +308,7 @@ void Robot::updateStatusOfCurrent(int actuator, int verbose) // Read and parse d
     string result;
     do
     {
+        Sleep(50);
         result = m_busManager.modbusReadData(actuator, 0x3, wordAdress, 0x0001, 2);
         if(result == "ERROR")
         {
@@ -374,7 +400,7 @@ int Robot::getRobotPosition(int actuator)
 
 bool Robot::activateMODBUS(int actuator)
 {
-    Sleep(100);
+    Sleep(50);
     int writeSuccessful = m_busManager.modbusWriteData(actuator, 0x5, 0x0427, 0xFF00); // WriteSingleCoil
     updateStatusOfCurrent(actuator);
     return writeSuccessful;
@@ -382,10 +408,10 @@ bool Robot::activateMODBUS(int actuator)
 
 bool Robot::servo(bool onOff, int actuator)
 {
-    Sleep(100);
+    Sleep(50);
     (onOff) ? m_busManager.modbusWriteData(actuator, 0x5, 0x0403, 0xFF00) : m_busManager.modbusWriteData(actuator, 0x5, 0x0403, 0x0000); // WriteSingleCoil
     updateStatusOfCurrent(actuator);
-    return deviceDataStatusRegister1[12];
+    return (deviceDataStatusRegister1[12] == onOff);
 }
 
 bool Robot::getDeviceDataStatusRegister1Bit(int index)

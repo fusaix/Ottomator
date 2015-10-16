@@ -14,10 +14,17 @@
 #include <string>
 #include "ottoutils.h"
 
-#define POSITION_ZERO        0
+#define Return_PSFL             2
+#define Position_completed      1
+#define Time_out                0
+#define Writing_error           -1
+#define Issue_detected          -2
+#define Input_error             -3
+
+#define POSITION_ZERO           0
 // Sources holder 1..20
-#define POSITION_DETECTOR   991
-#define POSITION_REST       992
+#define POSITION_DETECTOR       991
+#define POSITION_REST           992
 
 // Logging as global function
 void writeLog(std::string text);
@@ -30,7 +37,7 @@ public:
 
   // Motion methods
   int setPosition(int actuator, int position, int timeOut = 40000); //  Default timeOut = 40s
-  int setCastelPositionTo(bool open, int timeOut = 40000); // Sortcut function for castel motion
+  int setCastelPositionTo(bool open, int timeOut = 13000); // Sortcut function for castel motion
   bool jog(int actuator, int direction, int duration = 500); // Default duration = 0.5s
   bool homing(int actuator);
 
