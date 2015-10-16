@@ -712,19 +712,23 @@ void Ottomator::setNCurrentSample(int n)
 
 void Ottomator::xyOfSample(int n, int& x, int& y)
 {
-  x=n%5;
-  if(x == 0) x = 5;
-  if(n == POSITION_REST    ) x = 4;
-  if(n == POSITION_DETECTOR) x = 6;
-  if(n == POSITION_ZERO    ) x = 1;
+    x=n%5;
+    if(x == 0) x = 5;
+    if(n == POSITION_REST    ) x = 4;
+    if(n == POSITION_DETECTOR) x = 6;
+    if(n == POSITION_ZERO    ) x = 1;
 
-  y=(n+4+5)/5;
-  if (n==POSITION_REST || n==POSITION_DETECTOR) y=6;
+    y=(n+4+5)/5;
+    if (n==POSITION_REST || n==POSITION_DETECTOR) y=6;
 }
 
 const char* Ottomator::GetErrorTextFrench(int i)
 {
-  switch (i) {
+    switch (i) {
+
+
+
+
     default: return NULL;
-  }
+    }
 }
