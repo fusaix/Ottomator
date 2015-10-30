@@ -17,6 +17,9 @@
 
 using namespace std;
 
+int CurrentPosition(0);
+int isSampleIn(0);
+
 void writeLog(string text)
 {
     cout << text;
@@ -297,6 +300,190 @@ bool measuringFinished()
 }
 
 
+/////////////////////////////////////////////////////////////////////////////
+/// Code in InterWinner
+
+
+
+int Language()
+{
+    return 2; // French
+}
+
+void ReportError(int number, const char* text){
+    cout << "----------ERROR----------" << endl;
+    cout << number << endl;
+    cout << text << endl;
+    cout << "-------------------------" << endl;
+
+}
+
+void AbortSequence(int number)
+{
+    cout << "----------SEQUENCE ABORTED----------" << endl;
+    cout << number << endl;
+    cout << "------------------------------------" << endl;
+}
+
+void BgStartAcq(Ottomator& theSequencer) /// theSequencer à enlever
+{
+    bool fatal(false), problemSolved(false);
+    int trial(0);
+    string s;
+    while (1) {
+        DWORD ErrorCode = theSequencer.InsertSample(CurrentPosition); /// theSequencer à enlever
+        if (!ErrorCode) { // everything is ok, go for it
+            isSampleIn = CurrentPosition;
+            return;
+        }
+
+        // Display
+        s = "Cyclope2: " + theSequencer.GetErrorText(ErrorCode, Language());
+        ReportError(3, s.c_str());
+
+        // Manage error
+
+        switch(ErrorCode)
+        {
+            case CYCLOPE2_SERVO_OFF:
+                problemSolved = theSequencer.solveCYCLOPE2_SERVO_OFF();
+                if(!problemSolved) trial++; else trial = 0;
+                break;
+            case CYCLOPE2_STOP_BIT:
+                problemSolved = theSequencer.solveCYCLOPE2_STOP_BIT();
+                if(!problemSolved) trial++; else trial = 0;
+                break;
+            case CYCLOPE2_ALARME_ACQUITTABLE:
+                problemSolved = theSequencer.solveCYCLOPE2_ALARME_ACQUITTABLE();
+                if(!problemSolved) trial++; else trial = 0;
+                break;
+            case CYCLOPE2_COLLISION_PINCE:
+                theSequencer.solveCYCLOPE2_COLLISION_PINCE();
+            case CYCLOPE2_COLLISION_CHATEAU:
+            case CYCLOPE2_DANGER_TIME_OUT:
+            case CYCLOPE2_ALARME_GRAVE:
+            case CYCLOPE2_ERREUR_CODEUR_ABSOLU:
+            case CYCLOPE2_ERREUR_MOTEUR:
+            case CYCLOPE2_ERREUR_INCONNUE:
+                fatal = true;
+        }
+        cout << "Trial = " + OttoUtils::numberToString(trial) << endl; /// à enlever
+        if(trial > 5) fatal = true;
+
+        // Abort sequence if this is fatal
+        if (fatal) {theSequencer.resetM_StatusMatrix(); AbortSequence(-1); return;}
+
+        // Else we have a non-fatal (or not yet fatal) error. Wait and retry.
+        Sleep(5000);
+    }
+}
+
+
+void BgEndAcq(Ottomator& theSequencer)
+{
+    bool fatal(false), problemSolved(false);
+    int trial(0);
+    string s;
+    while (1) {
+        DWORD ErrorCode = theSequencer.RemoveSample(isSampleIn); /// theSequencer à enlever
+        if (!ErrorCode) return; // everything is ok, go for it
+
+        // Display
+        s = "Cyclope2: " + theSequencer.GetErrorText(ErrorCode, Language());
+        ReportError(3, s.c_str());
+
+        // Manage error
+
+        switch(ErrorCode)
+        {
+            case CYCLOPE2_SERVO_OFF:
+                problemSolved = theSequencer.solveCYCLOPE2_SERVO_OFF();
+                if(!problemSolved) trial++; else trial = 0;
+                break;
+            case CYCLOPE2_STOP_BIT:
+                problemSolved = theSequencer.solveCYCLOPE2_STOP_BIT();
+                if(!problemSolved) trial++; else trial = 0;
+                break;
+            case CYCLOPE2_ALARME_ACQUITTABLE:
+                problemSolved = theSequencer.solveCYCLOPE2_ALARME_ACQUITTABLE();
+                if(!problemSolved) trial++; else trial = 0;
+                break;
+            case CYCLOPE2_COLLISION_PINCE:
+                theSequencer.solveCYCLOPE2_COLLISION_PINCE();
+            case CYCLOPE2_COLLISION_CHATEAU:
+            case CYCLOPE2_DANGER_TIME_OUT:
+            case CYCLOPE2_ALARME_GRAVE:
+            case CYCLOPE2_ERREUR_CODEUR_ABSOLU:
+            case CYCLOPE2_ERREUR_MOTEUR:
+            case CYCLOPE2_ERREUR_INCONNUE:
+                fatal = true;
+        }
+        cout << "Trial = " + OttoUtils::numberToString(trial) << endl; /// à enlever
+        if(trial > 5) fatal = true;
+
+        // Abort sequence if this is fatal
+        if (fatal) {theSequencer.resetM_StatusMatrix(); AbortSequence(-1); return;}
+
+        // Else we have a non-fatal (or not yet fatal) error. Wait and retry.
+        Sleep(5000);
+    }
+}
+
+void BgFinishCycle(Ottomator& theSequencer)
+{
+    bool fatal(false), problemSolved(false);
+    int trial(0);
+    string s;
+    while (1) {
+        DWORD ErrorCode = theSequencer.FinishCycle(); /// theSequencer à enlever
+        if (!ErrorCode) return; // everything is ok, go for it
+
+        // Display
+        s = "Cyclope2: " + theSequencer.GetErrorText(ErrorCode, Language());
+        ReportError(3, s.c_str());
+
+        // Manage error
+
+        switch(ErrorCode)
+        {
+            case CYCLOPE2_SERVO_OFF:
+                problemSolved = theSequencer.solveCYCLOPE2_SERVO_OFF();
+                if(!problemSolved) trial++; else trial = 0;
+                break;
+            case CYCLOPE2_STOP_BIT:
+                problemSolved = theSequencer.solveCYCLOPE2_STOP_BIT();
+                if(!problemSolved) trial++; else trial = 0;
+                break;
+            case CYCLOPE2_ALARME_ACQUITTABLE:
+                problemSolved = theSequencer.solveCYCLOPE2_ALARME_ACQUITTABLE();
+                if(!problemSolved) trial++; else trial = 0;
+                break;
+            case CYCLOPE2_COLLISION_PINCE:
+                theSequencer.solveCYCLOPE2_COLLISION_PINCE();
+            case CYCLOPE2_COLLISION_CHATEAU:
+            case CYCLOPE2_DANGER_TIME_OUT:
+            case CYCLOPE2_ALARME_GRAVE:
+            case CYCLOPE2_ERREUR_CODEUR_ABSOLU:
+            case CYCLOPE2_ERREUR_MOTEUR:
+            case CYCLOPE2_ERREUR_INCONNUE:
+                fatal = true;
+        }
+        cout << "Trial = " + OttoUtils::numberToString(trial) << endl; /// à enlever
+        if(trial > 5) fatal = true;
+
+        // Abort sequence if this is fatal
+        if (fatal) {theSequencer.resetM_StatusMatrix(); AbortSequence(-1); return;}
+
+        // Else we have a non-fatal (or not yet fatal) error. Wait and retry.
+        Sleep(5000);
+    }
+}
+
+
+
+/////////////////////////////////////////////////////////////////////////////
+
+
 
 void sequenceMenu(Ottomator& theSequencer)
 {
@@ -318,10 +505,10 @@ void sequenceMenu(Ottomator& theSequencer)
         cout << "3 - [demo] go to sample N " << endl;
         cout << "4 - [demo] basic fetch/putback sample N " << endl;
         cout << "5 - [demo] complete cycle" << endl;
-        cout << "6 -  " << endl;
-        cout << "7 -  " << endl;
-        cout << "8 - " << endl;
-        cout << "9 -  " << endl;
+        cout << "6 - [CYCLOPE2] BgStartAcq()" << endl;
+        cout << "7 - [CYCLOPE2] BgEndAcq()" << endl;
+        cout << "8 - [CYCLOPE2] BgFinishCycle()" << endl;
+        cout << "9 - [CYCLOPE2] Sequence reset" << endl;
         cout << "0 - back" << endl;
         cout << "Your choice is: " ;
         cin >> command;
@@ -373,7 +560,7 @@ void sequenceMenu(Ottomator& theSequencer)
                         run = 1;
                     } else
                     {
-                        cout << "                SV\t" << "STP\t" << "EMGS\t" << "EMGV\t" << "P1\t" << "P2\t" << "LAT\t" << "ALML\t"
+                        cout << "                SV\t" << "STP\t" << "EMGS\t" << "EMGV\t" << "LAT\t" << "P1\t" << "P2\t" << "ALML\t"
                              << "ALMH*\t" << "ABER*\t" << "MOTO*\t" << "XCAS*\t" << endl;
                         cout << "The message is: ";
                         binMessage = OttoUtils::decToBin(message, true);
@@ -404,17 +591,21 @@ void sequenceMenu(Ottomator& theSequencer)
                 break;
             // 6 -
             case '6':
-
+                CurrentPosition = input(OttoUtils::sampleNb);
+                BgStartAcq(theSequencer);
                 break;
             // 7 -
             case '7':
-
+                BgEndAcq(theSequencer);
                 break;
             // 8 -
             case '8':
-
+                BgFinishCycle(theSequencer);
+                break;
             // 9 -
             case '9':
+                theSequencer.resetM_StatusMatrix();
+                cout << "Sequence reset" << endl;
                 break;
             case '0':
                 command = 0;
@@ -494,14 +685,7 @@ int main()
                 break;
             //
             case 'E':
-                theSequencer.resetM_StatusMatrix();
-                theSequencer.displayM_StatusMatrix();
-                theSequencer.setNCurrentSample(1);
-                theSequencer.displayM_StatusMatrix();
-                theSequencer.m_robot.updateStatusOfCurrent(1);
-                //theSequencer.m_robot.m_busManager.modbusReadData(1, 0x3, 0x9005, 0x0001);
-
-                theSequencer.displayM_StatusMatrix();
+                theSequencer.solveCYCLOPE2_COLLISION_PINCE();
 
                 break;
             //

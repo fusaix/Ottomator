@@ -28,8 +28,195 @@ Ottomator::~Ottomator()
 }
 
 
+//////////////////////////////// HIGH LEVEL STUFF ///////////////////////////////////////
+
+DWORD Ottomator::InsertSample(int iSample)  // Does the initialization/birth if necessary. Returns 0 on ok.
+{
+    int message, finished(false);
+    do
+    {
+        if(m_statusMatrix[3][0] != 11)
+        {   // B != 11
+            message = birthSequence(); // birthSequence()
+            if(message != Birth_completed) return Cyclope2_errorCode(message); // error
+        } else
+        {   // B = 11
+            if(m_statusMatrix[2][0] == 1)
+            {   // I = 1
+                    message = frameworkSequenceTo(true); // frameworkSequenceTo(initiate)
+                    if(message != Initiation_completed) return Cyclope2_errorCode(message); // error
+            } else
+            {   // I = -1
+                m_statusMatrix[1][0] = 1; // force F = 1
+                message = workSequenceTo(true, iSample); // workSequenceTo(fetch, new nCurrentSample)
+                if(message != Fetch_completed)
+                    return Cyclope2_errorCode(message); // error
+                else
+                    finished = true;
+            }
+        }
+    } while(!finished);
+
+    writeLog("### Sample " + OttoUtils::numberToString(iSample) + " inserted successfully in the lead castel.\n");
+    return 0;
+}
+
+DWORD Ottomator::RemoveSample(int iSample)  // Does the initialization/birth if necessary. Returns 0 on ok.
+{
+    int message, finished(false);
+    do
+    {
+        if(m_statusMatrix[3][0] != 11)
+        {   // B != 11
+            message = birthSequence(); // birthSequence()
+            if(message != Birth_completed) return Cyclope2_errorCode(message); // error
+        } else
+        {   // B = 11
+            if(m_statusMatrix[2][0] == 1)
+            {   // I = 1
+                message = frameworkSequenceTo(true); // frameworkSequenceTo(initiate)
+                if(message != Initiation_completed) return Cyclope2_errorCode(message); // error
+            } else
+            {   // I = -1
+                m_statusMatrix[1][0] = 0; // force F = 0
+                message = workSequenceTo(false, iSample); // workSequenceTo(putback, new nCurrentSample)
+                if(message != Putback_completed)
+                    return Cyclope2_errorCode(message); // error
+                else
+                    finished = true;
+            }
+        }
+    } while(!finished);
+
+    writeLog("### Sample " + OttoUtils::numberToString(iSample) + " removed successfully from the lead castel.\n");
+    return 0;
+}
+
+DWORD Ottomator::FinishCycle()  // Does the necessary to finish the cycle. Returns 0 on ok.
+{
+    int message, finished(false);
+    do
+    {
+        if(m_statusMatrix[3][0] != 11)
+        {   // B != 11
+            message = birthSequence(); // birthSequence()
+            if(message != Birth_completed) return Cyclope2_errorCode(message); // error
+        } else
+        {   // B = 11
+            message = frameworkSequenceTo(false); // frameworkSequenceTo(finish)
+            if(message != Finish_completed)
+                return Cyclope2_errorCode(message); // error
+            else
+                finished = true;
+        }
+    } while(!finished);
+    resetM_StatusMatrix();
+
+    writeLog("### Cycle finished successfully.\n");
+    return 0;
+}
+
+
+string Ottomator::GetErrorText(int ErrorNum, int iLanguage)
+{
+    if(iLanguage!=2) // This is not French
+    {   // TO BE DONE
+
+    }
+
+    switch (ErrorNum) // French
+    {
+        case CYCLOPE2_FENETRE_OUVERTE:              return "L'une des fenêtres est ouverte ou passeur non réarmé après arrêt d'urgence";
+        case CYCLOPE2_PORTE_CHATEAU_OUVERTE:        return "Porte latérale de château ouverte";
+        case CYCLOPE2_SERVO_OFF:                    return "Un ou plusieurs servo moteurs sont OFF";
+        case CYCLOPE2_STOP_BIT:                     return "Un des STOP bit est passé à 1";
+        case CYCLOPE2_ALARME_ACQUITTABLE:           return "Le passeur tente d'auto-acquitter une alarme mineure";
+        case CYCLOPE2_COLLISION_PINCE:              return "ATTENTION : Collision pince, l'emplacement de destination n'est pas libre. Veuillez réarmer le passeur pour libérer l'échantillon.";
+        case CYCLOPE2_COLLISION_CHATEAU:            return "ATTENTION : Collision château dans l'approche du détecteur. L'axe X se met en position de sécurité.";
+        case CYCLOPE2_DANGER_TIME_OUT:              return "ATTENTION : Danger time out. Un mouvement prends plus de temps que prévu. Comportement anormal.";
+        case CYCLOPE2_ALARME_GRAVE:                 return "ATTENTION : Alarme grave de nature indeterminé. Veuillez redémarrer le passeur, si cela persiste, suivez la procédure de diagnostique.";
+        case CYCLOPE2_ERREUR_CODEUR_ABSOLU:         return "ATTENTION : Erreur de codeur absolu sur l'un des axes. Veuillez redémarrer le passeur, si cela persiste, suivez la procédure de diagnostique.";
+        case CYCLOPE2_ERREUR_MOTEUR:                return "ATTENTION : Erreur moteur, vérin en défaut.";
+        case CYCLOPE2_ERREUR_INCONNUE:              return "ATTENTION : Erreur inconnue. Veuillez redémarrer le passeur, si cela persiste, suivez la procédure de diagnostique.";
+        default: return "";
+    }
+
+}
+
+// Problem solvers
+void Ottomator::solveCYCLOPE2_COLLISION_PINCE() // encountered CYCLOPE2_COLLISION_PINCE, thus open the plier and get the Z up. After that, you have to manage it as a fatal error.
+{
+    int ret;
+    do
+    {
+        writeLog("### Try to force open plier.\n");
+        ret = m_robot.setPosition(OttoUtils::pAct, 1); // Ouverture Pince
+    } while(ret != Position_completed);
+    m_robot.setPosition(OttoUtils::pAct, 1); // Ouverture Pince
+    do
+    {
+        writeLog("### Try to force lift plier.\n");
+        ret = m_robot.setPosition(OttoUtils::zAct, 1); // Remontée Z
+    } while(ret != Position_completed);
+}
+
+bool Ottomator::solveCYCLOPE2_ALARME_ACQUITTABLE() // CYCLOPE2_ALARME_ACQUITTABLE: Try to reset all low alarms, if unable to reset all low alarms after several trials then you have to manage it as a fatal error.
+{
+    bool ret(1);
+    for(int actuator=1; actuator<5; ++actuator)
+    {
+        m_robot.alarmReset(actuator);
+        ret &= !m_robot.getDeviceDataStatusRegister1Bit(9);
+    }
+    return ret;
+}
+
+bool Ottomator::solveCYCLOPE2_STOP_BIT() // CYCLOPE2_STOP_BIT: Clear STP bit for all actuators.
+{
+    bool ret(1);
+    for(int actuator=1; actuator<5; ++actuator) // 1..4
+    {
+        Sleep(100);
+        ret &= m_robot.m_busManager.modbusWriteData(actuator, 0x05, 0x040A, 0x0000, 2); // force Stop bit to 0, with all logs.
+    }
+    return ret;
+}
+
+bool Ottomator::solveCYCLOPE2_SERVO_OFF()
+{
+    return allServo(1);
+}
+
+
+//////////////////////////////// LOW LEVEL STUFF ////////////////////////////////////////
+
 /// Utilities
 /// ---------
+
+int Ottomator::Cyclope2_errorCode(int message)
+{
+    if(message > 0)
+    {   // fatal
+        if((message & P1) || (message & P2)) return CYCLOPE2_COLLISION_PINCE;
+        if(message & XCAS) return CYCLOPE2_COLLISION_CHATEAU;
+        if(message & TIME) return CYCLOPE2_DANGER_TIME_OUT;
+        if(message & ABER) return CYCLOPE2_ERREUR_CODEUR_ABSOLU;
+        if(message & MOTO) return CYCLOPE2_ERREUR_MOTEUR;
+        if(message & ALMH) return CYCLOPE2_ALARME_GRAVE;
+
+        // solvable
+        if(message & ALML) return CYCLOPE2_ALARME_ACQUITTABLE;
+        if((message & SV) && !(message & EMGS)) return CYCLOPE2_SERVO_OFF;
+        if(message & STP) return CYCLOPE2_STOP_BIT;
+
+        // wait
+        if(message & LAT) return CYCLOPE2_PORTE_CHATEAU_OUVERTE;
+        if((message & EMGS) || (message & EMGV)) return CYCLOPE2_FENETRE_OUVERTE;
+    }
+
+    return CYCLOPE2_ERREUR_INCONNUE;
+}
+
 
 string Ottomator::getAllStatusesOfDSS1ForBit(int index, bool verbose)
 {
@@ -138,7 +325,7 @@ int Ottomator::manageStatusGate()
     }
 
     // Gate checks V
-    for(i=0; i<5; ++i)
+    for(i=0; i<6; ++i)
     {
         switch(i)
         {
@@ -156,6 +343,9 @@ int Ottomator::manageStatusGate()
                 break;
             case 4: // LAT?
                 index = 1; normalValue = 1; weight = LAT;
+                break;
+            case 5: // TIME?
+                index = 8; normalValue = 0; weight = TIME;
                 break;
         }
 
@@ -215,6 +405,7 @@ int Ottomator::manageNextFor(int sequence, int actionSuccess, int error, int spe
     } else
     {
         ++error;
+        if(actionSuccess == Time_out) m_statusMatrix[8][5] = 1; // Time out !!!!
     }
     return error;
 }
@@ -298,7 +489,7 @@ int Ottomator::birthSequence()
             case 3:
                 if(m_statusMatrix[4][3]) // HEND Home return complete, thus homing is useless
                 {
-                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::zAct, 1), error); // RemontÃ©e Z
+                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::zAct, 1), error); // Remontée Z
                 } else
                 {
                     error = manageNextFor(sequence, m_robot.homing(OttoUtils::zAct), error); // Homing Z
@@ -308,7 +499,7 @@ int Ottomator::birthSequence()
                 error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::yAct, yOfSample(POSITION_REST)), error); // Safe position Y for Z actuator
                 break;
             case 5:
-                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::vAct, 1), error); // Ouverture porte chÃ¢teau
+                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::vAct, 1), error); // Ouverture porte château
                 break;
             case 6:
                 if(m_statusMatrix[4][1]) // HEND Home return complete, thus homing is useless
@@ -384,18 +575,18 @@ int Ottomator::frameworkSequenceTo(bool initiate) // Initiate / Finish
                         closePlier = (found > 300);
                     }
                 }
-                // Fermeture Pince OR Ouverture Pince -> puis aller Ã  la position par dÃ©faut
+                // Fermeture Pince OR Ouverture Pince -> puis aller à la position par défaut
                 (closePlier) ? error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::pAct, 2), error) : error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::pAct, 1), error, 7);
                 break;
             // Putback current sample (!nothingInPlier)
             case 2:
-                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::zAct, 1), error); // RemontÃ©e Z
+                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::zAct, 1), error); // Remontée Z
                 break;
             case 3:
-                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::xAct, xOfSample(m_statusMatrix[0][0])), error); // Positionnement emplacement m_statusMatrix[0][0] en x
+                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::xAct, xOfSample(m_statusMatrix[0][0])), error); // Positionnement emplacement nCurrentSample en x
                 break;
             case 4:
-                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::yAct, yOfSample(m_statusMatrix[0][0])), error); // Positionnement emplacement m_statusMatrix[0][0] en y
+                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::yAct, yOfSample(m_statusMatrix[0][0])), error); // Positionnement emplacement nCurrentSample en y
                 break;
             case 5:
                 error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::zAct, 2), error); // Descente Z Table
@@ -406,7 +597,7 @@ int Ottomator::frameworkSequenceTo(bool initiate) // Initiate / Finish
 
             // Default position
             case 7:
-                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::zAct, 1), error); // RemontÃ©e Z
+                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::zAct, 1), error); // Remontée Z
                 break;
             case 8:
                 error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::xAct, xOfSample(0)), error); // Positionnement emplacement Default en x
@@ -423,7 +614,7 @@ int Ottomator::frameworkSequenceTo(bool initiate) // Initiate / Finish
                     writeLog("Initiation completed\n");
                     return Initiation_completed;
                 }
-                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::vAct, 2), error); // Fermeture porte chÃ¢teau
+                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::vAct, 2), error); // Fermeture porte château
                 break;
 
             // Servo OFF
@@ -433,7 +624,7 @@ int Ottomator::frameworkSequenceTo(bool initiate) // Initiate / Finish
                 error = 0;
                 resetM_StatusMatrix(); // Batch completed, reset statuses
                 m_sampleArray.clear(); // Clear task list
-                writeLog("Finish completed\n"); // ChÃ¢teau fermÃ©, servoOFF : Fin de la sÃ©quence.
+                writeLog("Finish completed\n"); // Château fermé, servoOFF : Fin de la séquence.
                 return Finish_completed;
             } else
             {
@@ -455,7 +646,7 @@ int Ottomator::frameworkSequenceTo(bool initiate) // Initiate / Finish
 
 
 /// func --- 3
-int Ottomator::workSequenceTo(bool fetch, int sampleN) // bool fetch = true; Cas IW demande Ã  chercher l'Ã©chantillon (false = reposer) // int sampleN = 1; Cas Ã©chantillon 1
+int Ottomator::workSequenceTo(bool fetch, int sampleN) // bool fetch = true; Cas IW demande à chercher l'échantillon (false = reposer) // int sampleN = 1; Cas échantillon 1
 {
     // Initiate work
     m_statusMatrix[1][0] = fetch;
@@ -477,30 +668,30 @@ int Ottomator::workSequenceTo(bool fetch, int sampleN) // bool fetch = true; Cas
                 // Check if x position is safe
 
                 // perform
-                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::vAct, 1), error); // Ouverture porte chÃ¢teau
+                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::vAct, 1), error); // Ouverture porte château
                 break;
             case 2:
-                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::zAct, 1), error); // RemontÃ©e Z
+                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::zAct, 1), error); // Remontée Z
                 break;
 
             // Motion 1
             case 3:
                 if(m_statusMatrix[1][0])
                 {	// fetch
-                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::xAct, xOfSample(m_statusMatrix[0][0])), error); // Positionnement emplacement m_statusMatrix[0][0] en x
+                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::xAct, xOfSample(m_statusMatrix[0][0])), error); // Positionnement emplacement nCurrentSample en x
                 } else
                 {	// putback
-                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::yAct, yOfSample(POSITION_DETECTOR)), error); // Positionnement emplacement ChÃ¢teau en y
+                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::yAct, yOfSample(POSITION_DETECTOR)), error); // Positionnement emplacement Château en y
                 }
                 break;
             case 4:
                 if(m_statusMatrix[1][0])
                 {	// fetch
-                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::yAct, yOfSample(m_statusMatrix[0][0])), error); // Positionnement emplacement m_statusMatrix[0][0] en y
+                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::yAct, yOfSample(m_statusMatrix[0][0])), error); // Positionnement emplacement nCurrentSample en y
                 } else
                 {	// putback
-                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::xAct, xOfSample(POSITION_DETECTOR)), error, 0, 1); // Positionnement emplacement ChÃ¢teau en x
-                    if(error == XCAS) {m_robot.setPosition(OttoUtils::xAct, xOfSample(POSITION_ZERO)); return XCAS;} // fatal error
+                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::xAct, xOfSample(POSITION_DETECTOR)), error, 0, 1); // Positionnement emplacement Château en x
+                    if(error == XCAS) {m_robot.setPosition(OttoUtils::xAct, xOfSample(POSITION_REST)); m_statusMatrix[4][0] = 1; frameworkSequenceTo(true); return XCAS;} // fatal error
                 }
                 break;
 
@@ -510,23 +701,23 @@ int Ottomator::workSequenceTo(bool fetch, int sampleN) // bool fetch = true; Cas
                 break;
             case 6:
                 int destination;
-                destination = (m_statusMatrix[1][0]) ? 2 : 3; // fetch => Descente Z Table // putback => Descente Z ChÃ¢teau
+                destination = (m_statusMatrix[1][0]) ? 2 : 3; // fetch => Descente Z Table // putback => Descente Z Château
                 error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::zAct, destination), error); // Descente Z
                 break;
             case 7:
                 error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::pAct, 2), error); // Fermeture Pince // PEND => 1; // PSFL => 2; ### emptyCatch ??? ###
                 break;
             case 8:
-                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::zAct, 1), error); // RemontÃ©e Z
-                //if(positionCompletedFor("z") && !emptyCatch) ++m_statusMatrix[5][0]; // Z remontÃ© avec objet
-                //if(emptyCatch) return "Error: Empty catch"; // Z remontÃ© sans objet
+                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::zAct, 1), error); // Remontée Z
+                //if(positionCompletedFor("z") && !emptyCatch) ++m_statusMatrix[5][0]; // Z remonté avec objet
+                //if(emptyCatch) return "Error: Empty catch"; // Z remonté sans objet
                 break;
 
             // Motion 2
             case 9:
                 if(m_statusMatrix[1][0])
                 {	// fetch
-                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::yAct, yOfSample(POSITION_DETECTOR)), error); // Positionnement emplacement ChÃ¢teau en y
+                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::yAct, yOfSample(POSITION_DETECTOR)), error); // Positionnement emplacement Château en y
                 } else
                 {	// putback
                     error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::xAct, xOfSample(m_statusMatrix[0][0])), error); // Positionnement emplacement m_statusMatrix[0][0] en x
@@ -535,8 +726,8 @@ int Ottomator::workSequenceTo(bool fetch, int sampleN) // bool fetch = true; Cas
             case 10:
                 if(m_statusMatrix[1][0])
                 {	// fetch
-                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::xAct, xOfSample(POSITION_DETECTOR)), error, 0, 1); // Positionnement emplacement ChÃ¢teau en x
-                    if(error == XCAS) {m_robot.setPosition(OttoUtils::xAct, xOfSample(POSITION_ZERO)); return XCAS;} // fatal error
+                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::xAct, xOfSample(POSITION_DETECTOR)), error, 0, 1); // Positionnement emplacement Château en x
+                    if(error == XCAS) {m_robot.setPosition(OttoUtils::xAct, xOfSample(POSITION_REST)); m_statusMatrix[4][0] = 1; frameworkSequenceTo(true); return XCAS;} // fatal error
                 } else
                 {	// putback
                     error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::yAct, yOfSample(m_statusMatrix[0][0])), error); // Positionnement emplacement m_statusMatrix[0][0] en y
@@ -545,14 +736,14 @@ int Ottomator::workSequenceTo(bool fetch, int sampleN) // bool fetch = true; Cas
 
             // Put
             case 11:
-                destination = (m_statusMatrix[1][0]) ? 3 : 2; // fetch => Descente Z ChÃ¢teau // putback => Descente Z Table
+                destination = (m_statusMatrix[1][0]) ? 3 : 2; // fetch => Descente Z Château // putback => Descente Z Table
                 error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::zAct, destination), error); // Descente Z
                 break;
             case 12:
                 error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::pAct, 1), error); // Ouverture Pince
                 break;
             case 13:
-                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::zAct, 1), error); // RemontÃ©e Z
+                error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::zAct, 1), error); // Remontée Z
                 break;
 
             // Position d'attente
@@ -560,14 +751,14 @@ int Ottomator::workSequenceTo(bool fetch, int sampleN) // bool fetch = true; Cas
                 if(!m_statusMatrix[1][0])
                 {
                     m_statusMatrix[5][0] = 1; m_statusMatrix[1][0] = 1; // putback completion flag
-                    if(m_sampleArray.size() > 1)
+                    if(m_sampleArray.size() > 1) // Only for Cycler
                     {
                         m_sampleArray.erase(m_sampleArray.begin()); // updated m_sampleArray
                     } else
                     {
                         m_statusMatrix[2][0] = 0; // isInitiating = 0
                     }
-                    writeLog("Putback completed\n"); // Echantillon reposÃ© : Fin de la sÃ©quence.
+                    writeLog("Putback completed\n"); // Echantillon reposé : Fin de la séquence.
                     return Putback_completed;
                 }
                 // fetch
@@ -578,11 +769,11 @@ int Ottomator::workSequenceTo(bool fetch, int sampleN) // bool fetch = true; Cas
             case 15:
                 if(m_statusMatrix[1][0])
                 {	// fetch
-                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::vAct, 2), error); // Fermeture porte chÃ¢teau
+                    error = manageNextFor(sequence, m_robot.setPosition(OttoUtils::vAct, 2), error); // Fermeture porte château
                     if(error == 0)
                     {
                         m_statusMatrix[5][0] = 1; m_statusMatrix[1][0] = 0; // fetch completion flag
-                        writeLog("Fetch completed\n"); // ChÃ¢teau fermÃ© : Fin de la sÃ©quence.
+                        writeLog("Fetch completed\n"); // Château fermé : Fin de la séquence.
                         return Fetch_completed;
                     }
                 }
@@ -722,13 +913,4 @@ void Ottomator::xyOfSample(int n, int& x, int& y)
     if (n==POSITION_REST || n==POSITION_DETECTOR) y=6;
 }
 
-const char* Ottomator::GetErrorTextFrench(int i)
-{
-    switch (i) {
 
-
-
-
-    default: return NULL;
-    }
-}
